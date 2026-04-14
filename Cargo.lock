@@ -1244,6 +1244,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rlp-codec"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "thiserror",
+ "types",
+]
+
+[[package]]
 name = "ruint"
 version = "1.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
