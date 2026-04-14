@@ -1,6 +1,6 @@
 use bytes::Bytes;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RlpItem {
     Bytes(Bytes),
     List(Vec<RlpItem>),
