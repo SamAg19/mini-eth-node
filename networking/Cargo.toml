@@ -1,0 +1,14 @@
+[package]
+name = "networking"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bytes = "1.11.1"
+pin-project-lite = "0.2.17"
+thiserror = "2.0.18"
+tokio = { version = "1.52.1", features = ["full"] }
+tokio-util = { version = "0.7.18", features = ["codec"] }
+types = { path = "../types" }
+rlp-codec = { path = "../rlp-codec" }
+futures = "0.3.32"
