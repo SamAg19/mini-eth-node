@@ -8,7 +8,7 @@ pub fn decode(input: &[u8]) -> Result<(RlpItem, &[u8]), RlpError> {
     }
 
     if input[0] < 0x80 {
-        return Ok((RlpItem::Bytes(Bytes::from(vec![input[0]])), &input[1..]));
+        Ok((RlpItem::Bytes(Bytes::from(vec![input[0]])), &input[1..]))
     }
     else if input[0] < 0xb8 {
         let len = (input[0] - 0x80) as usize;
@@ -37,7 +37,7 @@ pub fn decode(input: &[u8]) -> Result<(RlpItem, &[u8]), RlpError> {
 
         let mut decoded: Vec<RlpItem> = vec![];
 
-        while payload_slice.len() > 0 {
+        while payload_slice.is_empty() {
             let (item, remaining) = decode(payload_slice)?;
             decoded.push(item);
             payload_slice = remaining;
@@ -57,7 +57,7 @@ pub fn decode(input: &[u8]) -> Result<(RlpItem, &[u8]), RlpError> {
 
         let mut decoded: Vec<RlpItem> = vec![];
 
-        while payload_slice.len() > 0 {
+        while payload_slice.is_empty() {
             let (item, remaining) = decode(payload_slice)?;
             decoded.push(item);
             payload_slice = remaining;

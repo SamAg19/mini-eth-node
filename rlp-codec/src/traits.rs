@@ -100,7 +100,7 @@ impl RlpDecodable for u64 {
                     return Err(RlpError::InvalidLength(x.len()));
                 }
                 let mut arr: [u8; 8] = [0x00; 8];
-                arr[8 - x.len()..].copy_from_slice(&x);
+                arr[8 - x.len()..].copy_from_slice(x);
                 Ok(u64::from_be_bytes(arr))
             },
             RlpItem::List(_) => Err(RlpError::UnexpectedType(0xc0))
@@ -124,7 +124,7 @@ impl RlpDecodable for u128 {
                     return Err(RlpError::InvalidLength(x.len()));
                 }
                 let mut arr: [u8; 16] = [0x00; 16];
-                arr[16 - x.len()..].copy_from_slice(&x);
+                arr[16 - x.len()..].copy_from_slice(x);
                 Ok(u128::from_be_bytes(arr))
             },
             RlpItem::List(_) => Err(RlpError::UnexpectedType(0xc0))
@@ -145,7 +145,7 @@ impl RlpDecodable for bool {
     fn from_rlp_item(item: &RlpItem) -> Result<Self, RlpError> where Self: Sized {
         match item {
             RlpItem::Bytes(x) => {
-                if x.len() > 1 || x.len() == 0 {
+                if x.len() > 1 || x.is_empty() {
                     return Err(RlpError::InvalidLength(x.len()));
                 }
                 match x[0] {
@@ -216,7 +216,8 @@ impl RlpEncodable for AccessListItem {
     fn to_rlp_item(&self) -> RlpItem {
         let mut list: Vec<RlpItem> = vec![];
         list.push(self.address.to_rlp_item());
-        list.push(RlpItem::List(self.storage_keys.iter().map(|sk| sk.to_rlp_item()).collect()));
+        let item_list: Vec<RlpItem> = self.storage_keys.iter().map(|sk| sk.to_rlp_item()).collect();
+        list.push(RlpItem::List(item_list));
 
         RlpItem::List(list)
     }
