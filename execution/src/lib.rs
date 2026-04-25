@@ -6,3 +6,6 @@ pub mod pipeline;
 pub mod primitives;
 pub mod providers;
 pub mod validator;
+
+#[cfg(test)]
+pub(crate) mod test_helpers;

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use types::{Address, B256, Transaction};
+use types::{Address, B256};
+use rlp_codec::signing::SignedTransaction;
 
 use crate::{
     error::ExecutionError,
@@ -14,23 +15,27 @@ use crate::{
 pub struct InMemoryProvider {
     pub blocks: HashMap<BlockNumber, Block>,
     pub blocks_by_hash: HashMap<B256, BlockNumber>,
-    pub transactions: HashMap<B256, (Transaction, BlockNumber)>,
+    pub transactions: HashMap<B256, (SignedTransaction, BlockNumber)>,
     pub receipts: HashMap<B256, Receipt>,
     pub state: HashMap<Address, AccountInfo>,
     pub storage: HashMap<(Address, B256), B256>,
 }
 
 impl InMemoryProvider {
-    pub fn insert_block(&mut self, block: Block) {
+    pub fn insert_block(&mut self, block: Block) -> Result<(), ExecutionError> {
         self.blocks_by_hash
             .insert(block.header.hash, block.header.block_number);
+        for signed_tx in &block.transactions {
+            self.transactions.insert(signed_tx.hash()?, (signed_tx.clone(), block.header.block_number));
+        }
         self.blocks.insert(block.header.block_number, block);
+        Ok(())
     }
 
     pub fn insert_transaction(
         &mut self,
         hash: B256,
-        transaction: Transaction,
+        transaction: SignedTransaction,
         block_number: BlockNumber,
     ) {
         self.transactions.insert(hash, (transaction, block_number));
@@ -99,7 +104,7 @@ impl StateProvider for InMemoryProvider {
 }
 
 impl TransactionProvider for InMemoryProvider {
-    fn get_transaction(&self, hash: B256) -> Result<Transaction, ExecutionError> {
+    fn get_transaction(&self, hash: B256) -> Result<SignedTransaction, ExecutionError> {
         self.transactions
             .get(&hash)
             .map(|(tx, _)| tx.clone())
@@ -109,7 +114,7 @@ impl TransactionProvider for InMemoryProvider {
     fn get_block_transactions(
         &self,
         block_number: BlockNumber,
-    ) -> Result<Vec<Transaction>, ExecutionError> {
+    ) -> Result<Vec<SignedTransaction>, ExecutionError> {
         self.blocks
             .get(&block_number)
             .map(|b| b.transactions.clone())
@@ -134,7 +139,8 @@ impl ReceiptProvider for InMemoryProvider {
 mod tests {
     use super::*;
     use crate::providers::FullProvider;
-    use types::Bloom;
+    use crate::test_helpers::dummy_signed;
+    use types::{Bloom, Transaction};
 
     const BLOCK_NUMBER: BlockNumber = 7;
     const MISSING_NUMBER: BlockNumber = 9999;
@@ -167,15 +173,15 @@ mod tests {
         Address::new([0xfe; 20])
     }
 
-    fn make_tx(nonce: u64) -> Transaction {
-        Transaction::Legacy {
+    fn make_signed_tx(nonce: u64) -> SignedTransaction {
+        dummy_signed(Transaction::Legacy {
             nonce,
             gas_price: 1_000_000_000,
             gas_limit: 21_000,
             to: Some(Address::new([0x22; 20])),
             value: 1_000,
             data: vec![],
-        }
+        })
     }
 
     fn make_header() -> Header {
@@ -222,13 +228,16 @@ mod tests {
 
     fn populated() -> InMemoryProvider {
         let mut provider = InMemoryProvider::default();
-        let tx1 = make_tx(0);
-        let tx2 = make_tx(1);
+        let tx1 = make_signed_tx(0);
+        let tx2 = make_signed_tx(1);
         let block = Block {
             header: make_header(),
             transactions: vec![tx1.clone(), tx2.clone()],
         };
-        provider.insert_block(block);
+        provider.insert_block(block).unwrap();
+        // Re-index the same txs under fixed dummy hashes so the rest of these
+        // provider-layer tests can look them up by stable, easy-to-read keys
+        // without depending on real keccak output.
         provider.insert_transaction(tx_hash_1(), tx1, BLOCK_NUMBER);
         provider.insert_transaction(tx_hash_2(), tx2, BLOCK_NUMBER);
         provider.insert_receipt(make_receipt(tx_hash_1(), 0));
@@ -284,14 +293,14 @@ mod tests {
     fn fetch_transaction<P: TransactionProvider>(
         p: &P,
         h: B256,
-    ) -> Result<Transaction, ExecutionError> {
+    ) -> Result<SignedTransaction, ExecutionError> {
         p.get_transaction(h)
     }
 
     fn fetch_block_transactions<P: TransactionProvider>(
         p: &P,
         n: BlockNumber,
-    ) -> Result<Vec<Transaction>, ExecutionError> {
+    ) -> Result<Vec<SignedTransaction>, ExecutionError> {
         p.get_block_transactions(n)
     }
 
@@ -370,8 +379,8 @@ mod tests {
     #[test]
     fn transaction_success() {
         let p = populated();
-        let tx = fetch_transaction(&p, tx_hash_1()).unwrap();
-        match tx {
+        let signed = fetch_transaction(&p, tx_hash_1()).unwrap();
+        match signed.transaction {
             Transaction::Legacy { nonce, .. } => assert_eq!(nonce, 0),
             _ => panic!("expected Legacy"),
         }

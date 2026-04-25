@@ -1,5 +1,6 @@
 use std::{cell::RefCell, collections::HashMap};
 
+use rlp_codec::signing::SignedTransaction;
 use types::{Address, B256};
 
 use crate::{
@@ -203,11 +204,11 @@ impl<T: BlockProvider + HeaderProvider + StateProvider + TransactionProvider + R
     fn get_block_transactions(
         &self,
         block_number: BlockNumber,
-    ) -> Result<Vec<types::Transaction>, ExecutionError> {
+    ) -> Result<Vec<SignedTransaction>, ExecutionError> {
         self.inner.get_block_transactions(block_number)
     }
 
-    fn get_transaction(&self, hash: B256) -> Result<types::Transaction, ExecutionError> {
+    fn get_transaction(&self, hash: B256) -> Result<SignedTransaction, ExecutionError> {
         self.inner.get_transaction(hash)
     }
 }
@@ -225,7 +226,7 @@ mod tests {
     use super::*;
     use crate::in_memory::InMemoryProvider;
     use crate::providers::FullProvider;
-    use types::{Bloom, Transaction};
+    use types::Bloom;
 
     // Wraps an `InMemoryProvider` and counts calls into the three methods that
     // `CachedProvider` is supposed to short-circuit on a cache hit.
@@ -278,13 +279,13 @@ mod tests {
     }
 
     impl TransactionProvider for CountingProvider {
-        fn get_transaction(&self, hash: B256) -> Result<Transaction, ExecutionError> {
+        fn get_transaction(&self, hash: B256) -> Result<SignedTransaction, ExecutionError> {
             self.inner.get_transaction(hash)
         }
         fn get_block_transactions(
             &self,
             block_number: BlockNumber,
-        ) -> Result<Vec<Transaction>, ExecutionError> {
+        ) -> Result<Vec<SignedTransaction>, ExecutionError> {
             self.inner.get_block_transactions(block_number)
         }
     }
@@ -320,7 +321,7 @@ mod tests {
     fn populated_inner() -> InMemoryProvider {
         let mut p = InMemoryProvider::default();
         for n in 0u64..5 {
-            p.insert_block(make_block(n));
+            p.insert_block(make_block(n)).unwrap();
         }
         p.set_account(Address::new([0x11; 20]), AccountInfo::default());
         p

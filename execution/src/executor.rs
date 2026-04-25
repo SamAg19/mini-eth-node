@@ -1,4 +1,4 @@
-use types::{Address, B256, Bloom, Transaction};
+use types::{Address, Bloom, Transaction};
 
 use crate::{
     error::ExecutionError,
@@ -14,18 +14,16 @@ pub struct ExecutionOutput {
     pub logs_bloom: Bloom,
 }
 
-pub struct TransactionWithSender {
-    pub transaction: Transaction,
-    pub sender: Address,
-    pub hash: B256,
+pub struct BlockWithSenders {
+    pub block: Block,
+    pub senders: Vec<Address>
 }
 
 pub trait BlockExecutor {
     type Output;
     fn execute(
         &self,
-        block: &Block,
-        txs_with_senders: &[TransactionWithSender],
+        block_with_senders: &BlockWithSenders,
         state: &mut InMemoryProvider,
     ) -> Result<Self::Output, ExecutionError>;
 }
@@ -36,17 +34,16 @@ impl BlockExecutor for ValueTransferExecutor {
     type Output = ExecutionOutput;
     fn execute(
         &self,
-        block: &Block,
-        txs_with_senders: &[TransactionWithSender],
+        block_with_senders: &BlockWithSenders,
         state: &mut InMemoryProvider,
     ) -> Result<Self::Output, ExecutionError> {
         let mut cumulative_gas_used: u64 = 0;
         let mut receipts = vec![];
         let mut logs_bloom: Bloom = Bloom::zero();
-        for (i, tx_with_sender) in txs_with_senders.iter().enumerate() {
-            let mut account = state.get_account(tx_with_sender.sender)?;
+        for (i, (signed_tx,sender) ) in block_with_senders.block.transactions.iter().zip(block_with_senders.senders.iter()).enumerate() {
+            let mut account = state.get_account(*sender)?;
             let sender_nonce = account.nonce;
-            match &tx_with_sender.transaction {
+            match &signed_tx.transaction {
                 Transaction::Legacy {
                     nonce,
                     gas_limit,
@@ -70,23 +67,23 @@ impl BlockExecutor for ValueTransferExecutor {
                 } => {
                     if *nonce != sender_nonce {
                         return Err(ExecutionError::InvalidNonce {
-                            address: tx_with_sender.sender,
+                            address: *sender,
                             expected: sender_nonce,
                             actual: *nonce,
                         });
                     }
 
-                    let max_cost = tx_with_sender.transaction.max_cost()?;
+                    let max_cost = signed_tx.transaction.max_cost()?;
                     if max_cost > account.balance {
                         return Err(ExecutionError::InsufficientBalance {
-                            address: tx_with_sender.sender,
+                            address: *sender,
                             available: account.balance,
                             required: max_cost,
                         });
                     }
-                    let effective_gas_price = tx_with_sender
+                    let effective_gas_price = signed_tx
                         .transaction
-                        .effective_gas_price(block.header.base_fee_per_gas)?;
+                        .effective_gas_price(block_with_senders.block.header.base_fee_per_gas)?;
 
                     account.balance = account
                         .balance
@@ -103,7 +100,7 @@ impl BlockExecutor for ValueTransferExecutor {
                         .nonce
                         .checked_add(1)
                         .ok_or(ExecutionError::Overflow)?;
-                    state.set_account(tx_with_sender.sender, account);
+                    state.set_account(*sender, account);
 
                     if let Some(recipient_address) = to {
                         let mut recipient =
@@ -126,11 +123,11 @@ impl BlockExecutor for ValueTransferExecutor {
                         .checked_add(gas_used)
                         .ok_or(ExecutionError::Overflow)?;
                     let receipt = Receipt {
-                        transaction_hash: tx_with_sender.hash,
+                        transaction_hash: signed_tx.hash()?,
                         transaction_index: i as u64,
-                        block_hash: block.header.hash,
-                        block_number: block.header.block_number,
-                        from: tx_with_sender.sender,
+                        block_hash: block_with_senders.block.header.hash,
+                        block_number: block_with_senders.block.header.block_number,
+                        from: *sender,
                         to: *to,
                         contract_address: None,
                         cumulative_gas_used,

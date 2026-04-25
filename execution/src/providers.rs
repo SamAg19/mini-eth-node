@@ -1,4 +1,5 @@
-use types::{Address, B256, Transaction};
+use rlp_codec::signing::SignedTransaction;
+use types::{Address, B256};
 
 use crate::{
     error::ExecutionError,
@@ -38,11 +39,11 @@ pub trait StateProvider {
 }
 
 pub trait TransactionProvider {
-    fn get_transaction(&self, hash: B256) -> Result<Transaction, ExecutionError>;
+    fn get_transaction(&self, hash: B256) -> Result<SignedTransaction, ExecutionError>;
     fn get_block_transactions(
         &self,
         block_number: BlockNumber,
-    ) -> Result<Vec<Transaction>, ExecutionError>;
+    ) -> Result<Vec<SignedTransaction>, ExecutionError>;
 }
 
 pub trait ReceiptProvider {

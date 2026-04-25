@@ -1,3 +1,4 @@
+use rlp_codec::signing::SigningError;
 use thiserror::Error;
 use types::{Address, B256, TransactionError};
 
@@ -44,4 +45,6 @@ pub enum ExecutionError {
     Underflow,
     #[error(transparent)]
     Transaction(#[from] TransactionError),
+    #[error(transparent)]
+    Signing(#[from] SigningError)
 }

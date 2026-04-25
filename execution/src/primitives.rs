@@ -1,4 +1,5 @@
-use types::{Address, B256, Bloom, Transaction};
+use types::{Address, B256, Bloom};
+use rlp_codec::signing::SignedTransaction;
 
 pub type BlockNumber = u64;
 
@@ -19,7 +20,7 @@ pub struct Header {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Block {
     pub header: Header,
-    pub transactions: Vec<Transaction>,
+    pub transactions: Vec<SignedTransaction>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
