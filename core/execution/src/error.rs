@@ -43,6 +43,8 @@ pub enum ExecutionError {
     Overflow,
     #[error("arithmetic underflow")]
     Underflow,
+    #[error("Journal already set")]
+    JournalAlreadySet,
     #[error(transparent)]
     Transaction(#[from] TransactionError),
     #[error(transparent)]

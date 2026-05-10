@@ -13,3 +13,5 @@ mod snapshot_tests;
 pub mod test_harness;
 #[cfg(test)]
 pub(crate) mod test_helpers;
+
+pub use in_memory::InMemoryProvider;

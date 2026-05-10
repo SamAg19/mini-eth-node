@@ -1600,6 +1600,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "processor"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "execution",
+ "networking",
+ "rlp-codec",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "types",
+]
+
+[[package]]
 name = "proptest"
 version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

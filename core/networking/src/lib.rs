@@ -7,3 +7,5 @@ pub mod error;
 pub mod manager;
 pub mod message;
 pub mod server;
+
+pub use manager::PeerId;

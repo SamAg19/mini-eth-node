@@ -31,8 +31,15 @@ impl<E: BlockExecutor, V: ConsensusValidator> Pipeline<E, V> {
         self.validator
             .validate_header(&block_with_senders.block.header, &parent_header)?;
         self.validator.validate_body(&block_with_senders.block)?;
-        self.executor
-            .execute(block_with_senders, &mut self.provider)
+        self.provider.begin_journal()?;
+        let output = self.executor
+            .execute(block_with_senders, &mut self.provider);
+        if let Err(_) = output {
+            self.provider.rollback_journal();
+        } else {
+            self.provider.commit_journal();
+        }
+        output
     }
 }
 
@@ -215,6 +222,122 @@ mod tests {
 
         let err = pipeline.execute(&bws).unwrap_err();
         assert!(matches!(err, ExecutionError::InvalidNonce { .. }));
+    }
+
+    #[test]
+    fn failed_execution_rolls_back_partial_state_changes() {
+        let mut pipeline = setup_basic();
+        fund(&mut pipeline.provider, recipient_addr(), 10, 0);
+        let original_sender = pipeline.provider.get_account(test_sender()).unwrap();
+        let original_recipient = pipeline.provider.get_account(recipient_addr()).unwrap();
+        let valid = make_signed_tx(0, 1_000_000, 21_000);
+        let invalid = make_signed_tx(5, 1_000_000, 21_000);
+        let bws = block_with_senders(
+            child_header(1, hash_header(&parent_header()).unwrap(), 42_000),
+            vec![valid, invalid],
+        );
+
+        let err = pipeline.execute(&bws).unwrap_err();
+
+        assert!(matches!(err, ExecutionError::InvalidNonce { .. }));
+        assert_eq!(
+            pipeline.provider.get_account(test_sender()).unwrap(),
+            original_sender
+        );
+        assert_eq!(
+            pipeline.provider.get_account(recipient_addr()).unwrap(),
+            original_recipient
+        );
+    }
+
+    #[test]
+    fn failed_execution_removes_account_created_before_failure() {
+        let mut pipeline = setup_basic();
+        let new_recipient = second_recipient_addr();
+        assert!(matches!(
+            pipeline.provider.get_account(new_recipient),
+            Err(ExecutionError::AccountNotFound { .. })
+        ));
+        let valid = signed_legacy_tx(0, 1_000_000, 21_000, BASE_FEE, Some(new_recipient));
+        let invalid = signed_legacy_tx(5, 1_000_000, 21_000, BASE_FEE, Some(recipient_addr()));
+        let bws = block_with_senders(
+            child_header(1, hash_header(&parent_header()).unwrap(), 42_000),
+            vec![valid, invalid],
+        );
+
+        let err = pipeline.execute(&bws).unwrap_err();
+
+        assert!(matches!(err, ExecutionError::InvalidNonce { .. }));
+        assert!(matches!(
+            pipeline.provider.get_account(new_recipient),
+            Err(ExecutionError::AccountNotFound { .. })
+        ));
+    }
+
+    #[test]
+    fn failed_execution_restores_original_value_after_multiple_mutations() {
+        let mut pipeline = setup_basic();
+        fund(&mut pipeline.provider, recipient_addr(), 0, 0);
+        fund(&mut pipeline.provider, second_recipient_addr(), 0, 0);
+        let original_sender = pipeline.provider.get_account(test_sender()).unwrap();
+        let tx1 = make_signed_tx(0, 1_000_000, 21_000);
+        let tx2 = signed_legacy_tx(
+            1,
+            2_000_000,
+            21_000,
+            BASE_FEE,
+            Some(second_recipient_addr()),
+        );
+        let tx3 = make_signed_tx(7, 1_000_000, 21_000);
+        let bws = block_with_senders(
+            child_header(1, hash_header(&parent_header()).unwrap(), 63_000),
+            vec![tx1, tx2, tx3],
+        );
+
+        let err = pipeline.execute(&bws).unwrap_err();
+
+        assert!(matches!(err, ExecutionError::InvalidNonce { .. }));
+        assert_eq!(
+            pipeline.provider.get_account(test_sender()).unwrap(),
+            original_sender
+        );
+        assert_eq!(pipeline.provider.get_account(recipient_addr()).unwrap().balance, 0);
+        assert_eq!(
+            pipeline
+                .provider
+                .get_account(second_recipient_addr())
+                .unwrap()
+                .balance,
+            0
+        );
+    }
+
+    #[test]
+    fn successful_execution_commits_journaled_state_changes() {
+        let mut pipeline = setup_basic();
+        fund(&mut pipeline.provider, recipient_addr(), 0, 0);
+        let signed = make_signed_tx(0, 1_000_000, 21_000);
+        let bws = block_with_senders(
+            child_header(1, hash_header(&parent_header()).unwrap(), 21_000),
+            vec![signed],
+        );
+
+        pipeline.execute(&bws).unwrap();
+
+        let sender = pipeline.provider.get_account(test_sender()).unwrap();
+        assert_eq!(sender.nonce, 1);
+        assert_eq!(
+            sender.balance,
+            INITIAL_SENDER_BALANCE - 21_000u128 * BASE_FEE - 1_000_000
+        );
+        assert_eq!(
+            pipeline
+                .provider
+                .get_account(recipient_addr())
+                .unwrap()
+                .balance,
+            1_000_000
+        );
     }
 
     #[test]

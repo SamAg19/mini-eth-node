@@ -1,0 +1,21 @@
+[package]
+name = "processor"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+types = { path = "../core/types", features = [] }
+rlp-codec = { path = "../core/rlp-codec", features = [] }
+networking = { path = "../core/networking", features = [] }
+execution = { path = "../core/execution", features = [] }
+tokio = { version = "1.52.1", features = ["full"] }
+thiserror = "2.0.18"
+bytes = "1.11.1"
+tracing = "0.1.44"
+
+[dev-dependencies]
+tracing-subscriber = { version = "0.3.22", features = ["fmt"] }
+
+[features]
+optimism=["types/optimism", "rlp-codec/optimism"]
+test-utils=[]
